@@ -1,0 +1,21 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudops-pipeline
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudops-pipeline
+  template:
+    metadata:
+      labels:
+        app: cloudops-pipeline
+    spec:
+      containers:
+        - name: cloudops-pipeline
+          image: aadityadocker16/cloudops-pipeline:1.0
+          ports:
+            - containerPort: 80
+          imagePullPolicy: Always
