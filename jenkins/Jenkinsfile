@@ -10,24 +10,21 @@ pipeline {
     environment {
         APP_NAME = 'cloudops-pipeline'
         DOCKER_IMAGE = 'aadityadocker16/cloudops-pipeline'
-        DOCKER_TAG = "${BUILD_NUMBER}"
         K8S_DEPLOYMENT = 'cloudops-pipeline'
         K8S_SERVICE = 'cloudops-pipeline-service'
     }
 
     triggers {
-        // Scheduled pipeline run on the 25th of each month.
-        cron('H H 25 * *')
+        // Scheduled build on the 25th of every month.
+        cron('H 0 25 * *')
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh '''
-                    echo "Source code checked out successfully"
-                    echo "Build number: $BUILD_NUMBER"
-                '''
+                sh 'echo "Source code checked out successfully"'
+                sh 'ls -la'
             }
         }
 
@@ -46,6 +43,9 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
+                script {
+                    env.DOCKER_TAG = "${env.BUILD_NUMBER}"
+                }
                 sh '''
                     set -eu
                     docker build \
@@ -70,7 +70,7 @@ pipeline {
 
                         printf '%s' "$DOCKERHUB_TOKEN" |
                           docker login \
-                            --username "$DOCKERHUB_USER" \
+                            -u "$DOCKERHUB_USER" \
                             --password-stdin
 
                         docker push "$DOCKER_IMAGE:$DOCKER_TAG"
@@ -87,14 +87,29 @@ pipeline {
                 sh '''
                     set -eu
 
+                    echo "Checking Kubernetes deployment..."
+                    kubectl get deployment "$K8S_DEPLOYMENT"
+
+                    CONTAINER_NAME=$(kubectl get deployment "$K8S_DEPLOYMENT" \
+                      -o jsonpath='{.spec.template.spec.containers[0].name}')
+
+                    if [ -z "$CONTAINER_NAME" ]; then
+                        echo "ERROR: No container found in deployment."
+                        exit 1
+                    fi
+
+                    echo "Detected container: $CONTAINER_NAME"
+                    echo "Updating image to $DOCKER_IMAGE:$DOCKER_TAG"
+
                     kubectl set image \
                       deployment/"$K8S_DEPLOYMENT" \
-                      app="$DOCKER_IMAGE:$DOCKER_TAG"
+                      "$CONTAINER_NAME=$DOCKER_IMAGE:$DOCKER_TAG"
 
                     kubectl rollout status \
                       deployment/"$K8S_DEPLOYMENT" \
                       --timeout=120s
 
+                    echo "Deployment status:"
                     kubectl get deployments
                     kubectl get pods
                     kubectl get services
@@ -107,11 +122,9 @@ pipeline {
         success {
             echo 'CloudOps pipeline completed successfully.'
         }
-
         failure {
             echo 'Pipeline failed. Review Console Output for the failing stage.'
         }
-
         always {
             echo 'Pipeline execution finished.'
         }
