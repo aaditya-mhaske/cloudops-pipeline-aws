@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -15,16 +16,18 @@ pipeline {
     }
 
     triggers {
-        // Run at 12:00 AM on the 25th of every month.
-        cron('0 0 25 * *')
+        // Scheduled pipeline run on the 25th of each month.
+        cron('H H 25 * *')
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh 'echo "Source code checked out successfully"'
-                sh 'ls -la'
+                sh '''
+                    echo "Source code checked out successfully"
+                    echo "Build number: $BUILD_NUMBER"
+                '''
             }
         }
 
@@ -53,9 +56,6 @@ pipeline {
         }
 
         stage('Push to Docker Hub') {
-            when {
-                branch 'main'
-            }
             steps {
                 withCredentials([
                     usernamePassword(
@@ -65,11 +65,17 @@ pipeline {
                     )
                 ]) {
                     sh '''
+                        set -eu
                         set +x
+
                         printf '%s' "$DOCKERHUB_TOKEN" |
-                          docker login -u "$DOCKERHUB_USER" --password-stdin
+                          docker login \
+                            --username "$DOCKERHUB_USER" \
+                            --password-stdin
+
                         docker push "$DOCKER_IMAGE:$DOCKER_TAG"
                         docker push "$DOCKER_IMAGE:latest"
+
                         docker logout
                     '''
                 }
@@ -77,17 +83,20 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes') {
-            when {
-                branch 'main'
-            }
             steps {
                 sh '''
                     set -eu
-                    kubectl set image deployment/"$K8S_DEPLOYMENT" \
+
+                    kubectl set image \
+                      deployment/"$K8S_DEPLOYMENT" \
                       app="$DOCKER_IMAGE:$DOCKER_TAG"
-                    kubectl rollout status deployment/"$K8S_DEPLOYMENT" \
+
+                    kubectl rollout status \
+                      deployment/"$K8S_DEPLOYMENT" \
                       --timeout=120s
+
                     kubectl get deployments
+                    kubectl get pods
                     kubectl get services
                 '''
             }
@@ -98,9 +107,11 @@ pipeline {
         success {
             echo 'CloudOps pipeline completed successfully.'
         }
+
         failure {
             echo 'Pipeline failed. Review Console Output for the failing stage.'
         }
+
         always {
             echo 'Pipeline execution finished.'
         }
