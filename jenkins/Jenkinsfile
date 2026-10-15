@@ -1,0 +1,47 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate Project Files') {
+            steps {
+                powershell '''
+                    if (!(Test-Path "app/Dockerfile")) {
+                        throw "app/Dockerfile not found"
+                    }
+                    if (!(Test-Path "k8s/deployment.yaml")) {
+                        throw "k8s/deployment.yaml not found"
+                    }
+                    if (!(Test-Path "k8s/service.yaml")) {
+                        throw "k8s/service.yaml not found"
+                    }
+                    Write-Host "Project files validated successfully"
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                powershell 'docker build -t cloudops-pipeline:latest ./app'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'CloudOps pipeline completed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed. Check Console Output.'
+        }
+    }
+}
