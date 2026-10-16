@@ -8,23 +8,24 @@ pipeline {
     }
 
     environment {
-        APP_NAME = 'cloudops-pipeline'
         DOCKER_IMAGE = 'aadityadocker16/cloudops-pipeline'
         K8S_DEPLOYMENT = 'cloudops-pipeline'
         K8S_SERVICE = 'cloudops-pipeline-service'
     }
 
     triggers {
-        // Scheduled build on the 25th of every month.
-        cron('H 0 25 * *')
+        // Check the GitHub repository for changes every 5 minutes.
+        pollSCM('H/5 * * * *')
+
+        // Schedule a release check at midnight on the 25th.
+        cron('0 0 25 * *')
     }
 
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                sh 'echo "Source code checked out successfully"'
-                sh 'ls -la'
+                echo 'Source code checked out successfully.'
             }
         }
 
@@ -36,20 +37,18 @@ pipeline {
                     test -f app/index.html
                     test -f k8s/deployment.yaml
                     test -f k8s/service.yaml
-                    echo "Required project files found."
+                    test -f jenkins/Jenkinsfile
+                    echo "All required files are present."
                 '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    env.DOCKER_TAG = "${env.BUILD_NUMBER}"
-                }
                 sh '''
                     set -eu
                     docker build \
-                      -t "$DOCKER_IMAGE:$DOCKER_TAG" \
+                      -t "$DOCKER_IMAGE:$BUILD_NUMBER" \
                       -t "$DOCKER_IMAGE:latest" .
                 '''
             }
@@ -70,10 +69,10 @@ pipeline {
 
                         printf '%s' "$DOCKERHUB_TOKEN" |
                           docker login \
-                            -u "$DOCKERHUB_USER" \
+                            --username "$DOCKERHUB_USER" \
                             --password-stdin
 
-                        docker push "$DOCKER_IMAGE:$DOCKER_TAG"
+                        docker push "$DOCKER_IMAGE:$BUILD_NUMBER"
                         docker push "$DOCKER_IMAGE:latest"
 
                         docker logout
@@ -82,7 +81,29 @@ pipeline {
             }
         }
 
+        stage('Check Release Day') {
+            steps {
+                script {
+                    env.RELEASE_DAY = sh(
+                        script: 'date +%d',
+                        returnStdout: true
+                    ).trim()
+
+                    if (env.RELEASE_DAY == '25') {
+                        echo 'Release day confirmed: the 25th.'
+                    } else {
+                        echo "Today is day ${env.RELEASE_DAY}; production deployment is held until the 25th."
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Kubernetes') {
+            when {
+                expression {
+                    env.RELEASE_DAY == '25'
+                }
+            }
             steps {
                 sh '''
                     set -eu
@@ -93,23 +114,18 @@ pipeline {
                     CONTAINER_NAME=$(kubectl get deployment "$K8S_DEPLOYMENT" \
                       -o jsonpath='{.spec.template.spec.containers[0].name}')
 
-                    if [ -z "$CONTAINER_NAME" ]; then
-                        echo "ERROR: No container found in deployment."
-                        exit 1
-                    fi
+                    test -n "$CONTAINER_NAME"
 
-                    echo "Detected container: $CONTAINER_NAME"
-                    echo "Updating image to $DOCKER_IMAGE:$DOCKER_TAG"
+                    echo "Updating image to $DOCKER_IMAGE:$BUILD_NUMBER"
 
                     kubectl set image \
                       deployment/"$K8S_DEPLOYMENT" \
-                      "$CONTAINER_NAME=$DOCKER_IMAGE:$DOCKER_TAG"
+                      "$CONTAINER_NAME=$DOCKER_IMAGE:$BUILD_NUMBER"
 
                     kubectl rollout status \
                       deployment/"$K8S_DEPLOYMENT" \
                       --timeout=120s
 
-                    echo "Deployment status:"
                     kubectl get deployments
                     kubectl get pods
                     kubectl get services
