@@ -58,7 +58,7 @@ resource "aws_instance" "devopsforge" {
   vpc_security_group_ids      = [aws_security_group.devopsforge.id]
   associate_public_ip_address = true
 
-  iam_instance_profile = "DevOpsForge-EC2-SSM-Profile"
+  iam_instance_profile = "DevOpsForge-EC2-SSM-Role"
 
   root_block_device {
     volume_size = 8
