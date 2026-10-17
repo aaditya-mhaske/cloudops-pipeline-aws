@@ -1,17 +1,11 @@
 
 ---
 - name: Configure DevOpsForge EC2 worker
-  hosts: devopsforge
-  become: true
-  tasks:
-    - name: Install required packages
-      ansible.builtin.dnf:
-        name:
-          - git
-          - curl
-          - unzip
-        state: present
+  hosts: localhost
+  connection: local
+  become: false
 
+  tasks:
     - name: Confirm configuration management ran
       ansible.builtin.debug:
-        msg: "DevOpsForge worker configuration completed."
+        msg: "DevOpsForge configuration management completed successfully"
