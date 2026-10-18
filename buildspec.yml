@@ -1,0 +1,16 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Docker Hub"
+      - echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+  build:
+    commands:
+      - echo "Building CloudOps Pipeline image"
+      - docker build -t aadityadocker16/cloudops-pipeline:$CODEBUILD_BUILD_NUMBER .
+      - docker tag aadityadocker16/cloudops-pipeline:$CODEBUILD_BUILD_NUMBER aadityadocker16/cloudops-pipeline:latest
+  post_build:
+    commands:
+      - docker push aadityadocker16/cloudops-pipeline:$CODEBUILD_BUILD_NUMBER
+      - docker push aadityadocker16/cloudops-pipeline:latest
