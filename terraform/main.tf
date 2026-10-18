@@ -14,6 +14,7 @@ provider "aws" {
   region = "ap-southeast-2"
 }
 
+# Use the existing default VPC
 data "aws_vpc" "default" {
   default = true
 }
@@ -25,20 +26,20 @@ data "aws_subnets" "default" {
   }
 }
 
+# Latest Amazon Linux 2023 x86_64 AMI
+data "aws_ssm_parameter" "amazon_linux" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
 resource "aws_security_group" "devopsforge" {
-  name        = "devopsforge-demo-sg"
-  description = "DevOpsForge demo security group"
+  name_prefix = "devopsforge-"
+  description = "Security group for DevOpsForge demo"
   vpc_id      = data.aws_vpc.default.id
 
-  ingress {
-    description = "SSH - restrict to your IP before applying"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["127.0.0.1/32"]
-  }
+  # Use AWS Systems Manager Session Manager; no inbound SSH needed.
 
   egress {
+    description = "Allow outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -58,8 +59,6 @@ resource "aws_instance" "devopsforge" {
   vpc_security_group_ids      = [aws_security_group.devopsforge.id]
   associate_public_ip_address = true
 
-  iam_instance_profile = "DevOpsForge-EC2-SSM-Role"
-
   root_block_device {
     volume_size = 8
     volume_type = "gp3"
@@ -72,10 +71,6 @@ resource "aws_instance" "devopsforge" {
   }
 }
 
-data "aws_ssm_parameter" "amazon_linux" {
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
-}
-
 output "instance_id" {
   description = "DevOpsForge EC2 instance ID"
   value       = aws_instance.devopsforge.id
@@ -84,9 +79,4 @@ output "instance_id" {
 output "instance_state" {
   description = "EC2 instance state"
   value       = aws_instance.devopsforge.instance_state
-}
-
-output "public_ip" {
-  description = "EC2 public IP address"
-  value       = aws_instance.devopsforge.public_ip
 }
