@@ -95,3 +95,15 @@ GitHub: https://github.com/aaditya-mhaske
 ## Notes
 
 This repository is a DevOps learning and capstone project. Verify AWS resource state, permissions, costs, and deployment settings before making infrastructure changes.
+
+## Remote EC2 Configuration with AWS Systems Manager
+
+AWS Systems Manager Run Command was used to execute a remote configuration command on the EC2 instance in the `ap-southeast-2` region.
+
+The command successfully created `/opt/devopsforge/configuration.txt` containing a DevOpsForge configuration marker.
+
+**Verification result:** SSM command status was `Success`.
+
+**Ansible status:** The Ansible playbook was validated and executed locally. Remote Ansible execution against EC2 has not yet been verified.
+
+This separates the confirmed SSM remote configuration from the locally verified Ansible workflow.
